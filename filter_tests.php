@@ -28,6 +28,9 @@ function validate_result($link, $query, $expect_req, $expect_invalid){
 				.$result_arr['invalid_count']. ")<br><br>";
 		echo $output;
 	}
+	else{
+		echo "error validating<br>";
+	}
 }
 
 //each test should be unaffected by previous tests. so I'll run this before each one
@@ -81,7 +84,6 @@ function test_update_request($link){
 	echo "testing update requests (expected: Euro Telecom Group has ".$req." requests and ".$inv." invalid requests):<br>";
 	$json = json_encode($arr);
 	$result = send_request($json);
-	echo "<br>".$result."<br>";
 	
 	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 4 ORDER BY time DESC LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
@@ -102,7 +104,6 @@ function test_insert_request($link){
 	echo "testing insert requests (expected: Euro Telecom Group has ".$req." requests and ".$inv." invalid requests):<br>";
 	$json = json_encode($arr);
 	$result = send_request($json);
-	echo "<br>".$result."<br>";
 	
 	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 4 ORDER BY time DESC LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
@@ -118,7 +119,14 @@ function test_malformed($link){
 		'timestamp' => 1540071000,
 		'remoteIP' => 12345678901
 		);
-	echo "testing malformed request (it should die - doesn't know who to charge)<br>actual: " . send_request($arr) . "<br><br>";
+	$result = send_request($arr);
+	
+	$test_outcome = "SUCCESS";
+	if(strpos($result, 'die') === FALSE)
+		$test_outcome = "FAIL";
+	
+	echo "testing malformed request (it should die - doesn't know who to charge)<br>
+		".$test_outcome." (actual: ".$result.")<br><br>";
 }
 
 //more of a corner case than previous tests
@@ -126,7 +134,15 @@ function test_empty_json($link){
 	refresh_db($link);
 	$arr = array();
 	$json = json_encode($arr);
-	echo "testing empty JSON in request (expected: it should die):<br>actual: " . send_request($json) . "<br><br>";
+
+	$result = send_request($arr);
+	
+	$test_outcome = "SUCCESS";
+	if(strpos($result, 'die') === FALSE)
+		$test_outcome = "FAIL";
+	
+	echo "testing empty JSON in request (expected: it should die):<br>
+		".$test_outcome." (actual: ".$result.")<br><br>";
 }
 
 function test_missing_customer_id($link){
@@ -138,7 +154,14 @@ function test_missing_customer_id($link){
 		'remoteIP' => 12345678901
 		);
 	$json = json_encode($arr);
-	echo "testing malformed request (it should die - doesn't know who to charge)<br>actual: " . send_request($json) . "<br><br>";
+	$result = send_request($arr);
+	
+	$test_outcome = "SUCCESS";
+	if(strpos($result, 'die') === FALSE)
+		$test_outcome = "FAIL";
+	
+	echo "testing malformed request (it should die - doesn't know who to charge)<br>
+		".$test_outcome." (actual: " . $result . ")<br><br>";
 }
 
 function test_unknown_customer($link){
@@ -151,7 +174,14 @@ function test_unknown_customer($link){
 		'remoteIP' => 12345678901
 		);
 	$json = json_encode($arr);
-	echo "testing unknown customer (it should die - this is not a valid customer)<br>actual: " . send_request($json) . "<br><br>";
+	$result = send_request($arr);
+	
+	$test_outcome = "SUCCESS";
+	if(strpos($result, 'die') === FALSE)
+		$test_outcome = "FAIL";
+	
+	echo "testing unknown customer (it should die - this is not a valid customer)<br>
+		".$test_outcome." (actual: " . $result . ")<br><br>";
 }
 
 function test_disabled_customer($link){
@@ -163,45 +193,74 @@ function test_disabled_customer($link){
 		'timestamp' => 1540071000,
 		'remoteIP' => 12345678901
 		);
-		
+
 	$req = 6;
 	$inv = 5;
 	$json = json_encode($arr);
 	send_request($json);
 	echo "testing disabled customer (expected: Nacharoo delivery has ".$req." requests and ".$inv." invalid):<br>";
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 3 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 3
+			ORDER BY time DESC
+			LIMIT 1";
+	validate_result($link, $sql, $req, $inv);
+}
+
+//not quite like the others, since I have special behavior for it
+function test_missing_timestamp($link){
+	refresh_db($link);
+	$arr = array(
+		'tagID' => 560,
+		'userID' => 'frank',
+		'remoteIP' => 12345678901,
+		'customerID' => 4
+		);
+	$json = json_encode($arr);
+	send_request($json);
+	
+	$req = 1;
+	$inv = 1;
+	echo "testing missing timestamp (expected: Euro Telecom Group has ".$req." requests and ".$inv." invalid):<br>";
+	
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 4
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 
 //behavior should be all the same, so I left this as one test case
 function test_missing_others($link){
 	refresh_db($link);
-	//timestamp is within an hour, so it only updates the one 
 	$arr = array(
 		'tagID' => 560,
 		'userID' => 'frank',
-		'timestamp' => 1540071000,
 		'remoteIP' => 12345678901,
+		'timestamp' => 1540071000,
 		'customerID' => 4
 		);
 	//each iteration of loop sends a request with a different key missing
-	for($i = 0; $i < count($arr) - 1; $i++){
+	for($i = 0; $i < count($arr) - 2; $i++){
 		reset($arr);
 		$removed_key = key($arr); 
 		$removed = array_shift($arr);
-		$arr[$removed_key] = $removed;
 		$json = json_encode($arr);
-		send_request($json);
+		$result = send_request($json);
+		$arr[$removed_key] = $removed;
 	}
 	
-	$req = 9;
-	$inv = 8;
+	$req = 8;
+	$inv = 7;
 	echo "testing missing fields other than customerID (expected: Euro Telecom Group has ".$req." requests and ".$inv." invalid):<br>";
-	$json = json_encode($arr);
-	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 4 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 4
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 
@@ -221,7 +280,11 @@ function test_ip_blacklisted($link){
 	$json = json_encode($arr);
 	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 4 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 4
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 function test_user_blacklisted($link){
@@ -240,7 +303,11 @@ function test_user_blacklisted($link){
 	$json = json_encode($arr);
 	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 4 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 4
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 //again, kind of a corner case
@@ -260,7 +327,11 @@ function test_both_blacklisted($link){
 	$json = json_encode($arr);
 	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 4 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 4
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 
@@ -280,7 +351,11 @@ function test_ip_bl_customer_disabled($link){
 	$json = json_encode($arr);
 	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 3 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 3
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 
@@ -300,7 +375,11 @@ function test_user_bl_customer_disabled($link){
 	$json = json_encode($arr);
 	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 3 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 3
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 
@@ -320,7 +399,11 @@ function test_both_bl_customer_disabled($link){
 	$json = json_encode($arr);
 	send_request($json);
 	
-	$sql = "SELECT request_count, invalid_count FROM hourly_stats WHERE customer_id = 3 AND time = 20181020160000";
+	$sql = "SELECT request_count, invalid_count
+			FROM hourly_stats
+			WHERE customer_id = 3
+			ORDER BY time DESC
+			LIMIT 1";
 	validate_result($link, $sql, $req, $inv);
 }
 
@@ -333,6 +416,7 @@ test_empty_json($link);
 test_missing_customer_id($link);
 test_unknown_customer($link);
 test_disabled_customer($link);
+test_missing_timestamp($link);
 test_missing_others($link);
 test_ip_blacklisted($link);
 test_user_blacklisted($link);
