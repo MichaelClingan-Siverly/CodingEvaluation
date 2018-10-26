@@ -1,5 +1,5 @@
 <?php
-require "db_connect.php";
+require ".\private\db_connect.php";
 
 //Don't need PECL if I use curl. http://thisinterestsme.com/sending-json-via-post-php/
 function send_request($post_this){
@@ -57,7 +57,8 @@ function refresh_db($link){
 				(1, 19700101000001,1,1),
 				(3, 20181020210000,5,4),
 				(4, 20181020200000,1,0),
-				(4, 20181020210000,5,4);";
+				(4, 20181020210000,5,4),
+				(4, 20181018230000,1,1);";
 	
 	if(!mysqli_multi_query($link, $sql)){
 		die("error: " . mysqli_error($link) . "<br>");

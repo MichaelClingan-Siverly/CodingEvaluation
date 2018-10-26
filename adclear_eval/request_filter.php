@@ -1,6 +1,6 @@
 <?php
 
-require "db_connect.php";
+require ".\private\db_connect.php";
 
 function success_stub($raw_input){
 	exit();
